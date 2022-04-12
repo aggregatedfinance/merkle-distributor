@@ -27,6 +27,7 @@
     "axios": "^0.20.0",
     "chai": "^4.2.0",
     "commander": "^6.1.0",
+    "csv": "^6.0.5",
     "ethereum-waffle": "^3.0.0",
     "ethereumjs-util": "^7.0.4",
     "mocha": "^6.2.2",
@@ -42,6 +43,7 @@
     "pretest": "yarn compile",
     "test": "mocha",
     "generate-merkle-root": "ts-node scripts/generate-merkle-root.ts",
+    "generate-json-input": "ts-node scripts/generate-json-input.ts",
     "generate-merkle-root:example": "ts-node scripts/generate-merkle-root.ts --input scripts/example.json",
     "prepublishOnly": "yarn test"
   }
