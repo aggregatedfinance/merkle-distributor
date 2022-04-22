@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity =0.6.11;
+pragma solidity ^0.8.13;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/cryptography/MerkleProof.sol";
+import "./interfaces/IERC20.sol";
+import "./interfaces/MerkleProof.sol";
 import "./interfaces/IMerkleExchanger.sol";
 
 contract MerkleExchanger is IMerkleExchanger {
@@ -15,7 +15,7 @@ contract MerkleExchanger is IMerkleExchanger {
     // This is a packed array of booleans.
     mapping(uint256 => uint256) private claimedBitMap;
 
-    constructor(address token_, bytes32 merkleRoot_, address oldToken_, address holdingAccount_) public {
+    constructor(address token_, bytes32 merkleRoot_, address oldToken_, address holdingAccount_) {
         token = token_;
         merkleRoot = merkleRoot_;
         oldToken = oldToken_;
@@ -37,24 +37,36 @@ contract MerkleExchanger is IMerkleExchanger {
     }
 
     function claim(uint256 index, address account, uint256 amount, bytes32[] calldata merkleProof) external override {
-        require(!isClaimed(index), 'MerkleExchanger: Drop already claimed.');
+        require(!isClaimed(index), "MerkleExchanger: Drop already claimed.");
 
         // Verify the merkle proof.
         bytes32 node = keccak256(abi.encodePacked(index, account, amount));
-        require(MerkleProof.verify(merkleProof, merkleRoot, node), 'MerkleExchanger: Invalid proof.');
+        require(MerkleProof.verify(merkleProof, merkleRoot, node), "MerkleExchanger: Invalid proof.");
 
         // Verify the account holds the required number of old tokens and has approved their use.
-        uint256 allowance = IERC20(token).allowance(account, address(this));
+        uint256 allowance = IERC20(oldToken).allowance(account, address(this));
         
         require(allowance >= amount, "MerkleExchanger: Token allowance too small.");
-        require(IERC20(oldToken).balanceOf(account) >= amount, 'MerkleExchanger: Account does not hold enough tokens.');
+
+        require(IERC20(oldToken).balanceOf(account) >= amount, "MerkleExchanger: Account does not hold enough tokens.");
 
         // Mark it claimed and exchange the tokens.
         _setClaimed(index);
 
-        require(IERC20(oldToken).transferFrom(account, holdingAccount, amount), 'MerkleExchanger: Transfer of old tokens failed.');
-        require(IERC20(token).transfer(account, amount), 'MerkleExchanger: Transfer of new tokens failed.');
+        uint256 oldTokenBalance = IERC20(oldToken).balanceOf(account);
 
-        emit Claimed(index, account, amount);
+        if (oldTokenBalance > amount) {
+            require(IERC20(oldToken).transferFrom(account, holdingAccount, amount), "MerkleExchanger: Transfer of old tokens failed.");
+            require(IERC20(token).transfer(account, amount), "MerkleExchanger: Transfer of new tokens failed.");
+            emit Claimed(index, account, amount);
+        } else {
+            require(IERC20(oldToken).transferFrom(account, holdingAccount, oldTokenBalance), "MerkleExchanger: Transfer of old tokens failed.");
+            require(IERC20(token).transfer(account, oldTokenBalance), "MerkleExchanger: Transfer of new tokens failed.");
+            emit Claimed(index, account, oldTokenBalance);
+        }
+    }
+
+    function withdrawOld() public {
+      require(IERC20(oldToken).transfer(holdingAccount, IERC20(oldToken).balanceOf(address(this))), "MerkleExchanger::withdrawOld: Withdraw failed.");
     }
 }
